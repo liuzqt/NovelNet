@@ -12,7 +12,7 @@ import java.util.stream.Stream;
  * Created by liuziqi on 2018/4/15.
  */
 public class Relationship {
-    private final Set<String> pronoun = Stream.of("he", "she", "it", "him", "her", "they", "them").collect(Collectors.toSet());
+    private final Set<String> pronoun = Stream.of("he", "she", "it", "him", "her", "they", "them", "this", "that").collect(Collectors.toSet());
 
     private final String PERSON = "PERSON"; // NER tag, can also add ORGANIZATION if needed
     private int entityCount; // total entity, also as an increasing ID, but notice that some entities might be merged, causing the missing id
@@ -43,13 +43,13 @@ public class Relationship {
             String section = sections.get(i);
             if (debug)
                 System.out.println("processing section " + i);
-            long t1 = System.currentTimeMillis()/1000;
+            long t1 = System.currentTimeMillis() / 1000;
             List<MentionToken> tokens = this.parseCoref(section);
-            long t2 = System.currentTimeMillis()/1000;
-            System.out.println(t2-t1);
+            long t2 = System.currentTimeMillis() / 1000;
+            System.out.println(t2 - t1);
             parseRelationship(tokens);
-            long t3 = System.currentTimeMillis()/1000;
-            System.out.println(t3-t2);
+            long t3 = System.currentTimeMillis() / 1000;
+            System.out.println(t3 - t2);
         }
     }
 
@@ -132,10 +132,10 @@ public class Relationship {
         for (CorefChain corefChain : document.corefChains().values()) {
 
             // plug in name filter here
-            List<CorefMentionWrapper> cluster = corefChain.getMentionsInTextualOrder().stream().map(o -> new CorefMentionWrapper(o, nameFilter(o.mentionSpan))).collect(Collectors.toList());
+            List<CorefMentionWrapper> cluster = nameFilter(corefChain.getMentionsInTextualOrder());
 
             Entity entity = getEntity(cluster);
-            if (entity==null) continue;
+            if (entity == null) continue;
 
             for (CorefMentionWrapper m : cluster) {
                 MentionToken token = new MentionToken(
@@ -314,61 +314,38 @@ public class Relationship {
         return sb.toString();
     }
 
-    private String nameFilter(String name) {
-        String[] words = name.split("\\s+");
-        int i = 0;
-        while (i < words.length && words[i].charAt(0) >= 'a') i++;
+    private List<CorefMentionWrapper> nameFilter(List<CorefChain.CorefMention> mentions) {
+        List<CorefMentionWrapper> res = new ArrayList<>();
+        for (CorefChain.CorefMention m : mentions) {
+            String name = m.mentionSpan;
+            if (!pronoun.contains(name.toLowerCase())) {
+                String[] words = name.split("\\s+");
+                int i = 0;
+                while (i < words.length && (words[i].charAt(0) > 'Z' || words[i].charAt(0) < 'A' || Objects.equals(words[i], "The")))
+                    i++;
+                if (i == words.length) {
+                    continue;
+                } else {
+                    int j = words.length - 1;
+                    while (j >= 0 && (words[j].charAt(0) > 'Z' || words[j].charAt(0) < 'A')) j--;
+                    List<String> wordsRemain = new ArrayList<>();
+                    for (int k = i; k <= j; k++) {
+                        wordsRemain.add(words[k]);
+                    }
+                    name = String.join(" ", wordsRemain);
+                    System.out.println("\n");
+                    System.out.printf("%s\t%d,%d\t%s\n", m.mentionSpan, i, j, name);
+                }
 
-        String inter1 = i == words.length ? name : String.join(" ", Arrays.stream(words).skip(i).collect(Collectors.toList()));
-        return inter1.toLowerCase();
-    }
-}
+            }
 
-class Entity {
-    public int id;
-    public Set<String> names;
-    public int frequency;
-    public HashMap<Entity, Integer> neighborInteract;
-
-    public Entity(int id) {
-        this.id = id;
-        this.names = new HashSet<>();
-        this.frequency = 0;
-        neighborInteract = new HashMap<>();
-    }
-
-    public String toString() {
-        return Arrays.toString(names.toArray());
-    }
-}
-
-
-class MentionToken {
-    public int mentionID;
-    public int absPos;
-    public int senNum;
-    public int clusterID;
-    public String name;
-    public Entity entity;
-
-    public MentionToken(int mentionID, int absPos, int senNum, int clusterID, String name, Entity entity) {
-        this.mentionID = mentionID;
-        this.absPos = absPos;
-        this.senNum = senNum;
-        this.clusterID = clusterID;
-        this.name = name;
-        this.entity = entity;
+            res.add(new CorefMentionWrapper(m, name));
+        }
+        return res;
     }
 }
 
 
-class CorefMentionWrapper {
-    CorefChain.CorefMention m;
-    String string; //modified string
 
-    public CorefMentionWrapper(CorefChain.CorefMention m, String string) {
-        this.m = m;
-        this.string = string;
-    }
-}
+
 
