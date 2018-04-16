@@ -12,9 +12,9 @@ import java.util.stream.Stream;
  * Created by liuziqi on 2018/4/15.
  */
 public class Relationship {
-    private final Set<String> pronoun = Stream.of("he", "she", "it").collect(Collectors.toSet());
+    private final Set<String> pronoun = Stream.of("he", "she", "it", "him", "her", "they", "them").collect(Collectors.toSet());
 
-    private final String PERSON = "PERSON";
+    private final String PERSON = "PERSON"; // NER tag, can also add ORGANIZATION if needed
     private int entityCount; // total entity, also as an increasing ID, but notice that some entities might be merged, causing the missing id
     private int mergeCount;
     private int threshold;  // how many words allowed between two entities that they can be recognized as relationship
