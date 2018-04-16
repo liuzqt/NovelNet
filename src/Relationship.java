@@ -43,13 +43,20 @@ public class Relationship {
             String section = sections.get(i);
             if (debug)
                 System.out.println("processing section " + i);
+            long t1 = System.currentTimeMillis()/1000;
             List<MentionToken> tokens = this.parseCoref(section);
+            long t2 = System.currentTimeMillis()/1000;
+            System.out.println(t2-t1);
             parseRelationship(tokens);
+            long t3 = System.currentTimeMillis()/1000;
+            System.out.println(t3-t2);
         }
     }
 
     private ArrayList<String> getSections(String text, String granularity) {
-        return Arrays.stream(text.trim().split("\\n{2,}")).collect(Collectors.toCollection(ArrayList::new));
+        return Stream.of(text).collect(Collectors.toCollection(ArrayList::new));
+
+//        return Arrays.stream(text.trim().split("\\n{2,}")).collect(Collectors.toCollection(ArrayList::new));
     }
 
     /**
@@ -128,6 +135,7 @@ public class Relationship {
             List<CorefMentionWrapper> cluster = corefChain.getMentionsInTextualOrder().stream().map(o -> new CorefMentionWrapper(o, nameFilter(o.mentionSpan))).collect(Collectors.toList());
 
             Entity entity = getEntity(cluster);
+            if (entity==null) continue;
 
             for (CorefMentionWrapper m : cluster) {
                 MentionToken token = new MentionToken(
@@ -287,6 +295,7 @@ public class Relationship {
     }
 
     public String report() {
+        System.out.println("\n\n");
         StringBuilder sb = new StringBuilder("Total entity numbers: " + this.entityNumber() + "\n\n");
         List<Entity> entityList = entitySet.stream().sorted((o1, o2) -> o2.frequency - o1.frequency).collect(Collectors.toList());
 

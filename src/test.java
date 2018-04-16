@@ -1,13 +1,15 @@
 import edu.stanford.nlp.pipeline.StanfordCoreNLP;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Properties;
 
 public class test {
     public static void main(String[] args) throws Exception {
-//        String text = new String(Files.readAllBytes(Paths.get("./test.txt")));
+        String text = new String(Files.readAllBytes(Paths.get("./Harry_Potter_and_the_Sorcerers_Stone.txt")));
 
 
-        String text = "Harry Dummy Potter study in Dragon Planet. Potter has a dog called Bobby and he loves it. He loves Maggie and he is Maggie's father.";
+//        String text = "Harry Dummy Potter study in Dragon Planet. Potter has a dog called Bobby and he loves it. He loves Maggie and he is Maggie's father. Maggie has a good friend called Marry and she usually goes out with Marry. And Potter travel to England, he loves that place.";
 
         Properties props = new Properties();
         props.setProperty("annotators", "tokenize,ssplit,pos,lemma,ner, parse,coref");
