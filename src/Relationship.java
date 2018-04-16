@@ -77,13 +77,18 @@ public class Relationship {
         }
     }
 
+    /**
+     * helper function called by parseRelationship
+     *
+     * @param e1
+     * @param e2
+     */
     private void happenRelationship(Entity e1, Entity e2) {
         // 发生关系！
         if (!e1.equals(e2)) {
             e1.neighborInteract.put(e2, e1.neighborInteract.getOrDefault(e2, 0) + 1);
             e2.neighborInteract.put(e1, e2.neighborInteract.getOrDefault(e1, 0) + 1);
         }
-
     }
 
 
@@ -116,16 +121,20 @@ public class Relationship {
         document.sentences().forEach(o -> sentenceLen.add(sentenceLen.get(sentenceLen.size() - 1) + o.tokens().size()));
 
 
+        Collection<CorefChain> ccList = document.corefChains().values();
         for (CorefChain corefChain : document.corefChains().values()) {
-            List<CorefChain.CorefMention> cluster = corefChain.getMentionsInTextualOrder();
+
+            // plug in name filter here
+            List<CorefMentionWrapper> cluster = corefChain.getMentionsInTextualOrder().stream().map(o -> new CorefMentionWrapper(o, nameFilter(o.mentionSpan))).collect(Collectors.toList());
+
             Entity entity = getEntity(cluster);
 
-            for (CorefChain.CorefMention m : cluster) {
+            for (CorefMentionWrapper m : cluster) {
                 MentionToken token = new MentionToken(
-                        m.mentionID,
-                        m.startIndex + sentenceLen.get(m.sentNum - 1) - 1,
-                        m.sentNum, m.corefClusterID,
-                        m.mentionSpan.toLowerCase(),
+                        m.m.mentionID,
+                        m.m.startIndex + sentenceLen.get(m.m.sentNum - 1) - 1,
+                        m.m.sentNum, m.m.corefClusterID,
+                        m.string,
                         entity);
                 mentions.add(token);
                 tokenMap.put(token.absPos, token);
@@ -208,10 +217,10 @@ public class Relationship {
      * @param cluster a coref cluster
      * @return identify the entity they refer to (if non-exist then create a new one)
      */
-    private Entity getEntity(List<CorefChain.CorefMention> cluster) {
+    private Entity getEntity(List<CorefMentionWrapper> cluster) {
         int appearCount = cluster.size();
         List<String> cluster_names = cluster.stream()
-                .map(o -> o.mentionSpan.toLowerCase())
+                .map(o -> o.string)
                 .distinct()
                 .filter(o -> !pronoun.contains(o))
                 .collect(Collectors.toList());
@@ -295,6 +304,15 @@ public class Relationship {
 
         return sb.toString();
     }
+
+    private String nameFilter(String name) {
+        String[] words = name.split("\\s+");
+        int i = 0;
+        while (i < words.length && words[i].charAt(0) >= 'a') i++;
+
+        String inter1 = i == words.length ? name : String.join(" ", Arrays.stream(words).skip(i).collect(Collectors.toList()));
+        return inter1.toLowerCase();
+    }
 }
 
 class Entity {
@@ -332,6 +350,16 @@ class MentionToken {
         this.name = name;
         this.entity = entity;
     }
+}
 
+
+class CorefMentionWrapper {
+    CorefChain.CorefMention m;
+    String string; //modified string
+
+    public CorefMentionWrapper(CorefChain.CorefMention m, String string) {
+        this.m = m;
+        this.string = string;
+    }
 }
 

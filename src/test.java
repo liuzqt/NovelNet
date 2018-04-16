@@ -7,7 +7,7 @@ public class test {
 //        String text = new String(Files.readAllBytes(Paths.get("./test.txt")));
 
 
-        String text = "Harry Dummy Potter study in Dragon Planet. Potter has a lovely dog Bobby and he loves it. He loves Maggie and he is Maggie's father.";
+        String text = "Harry Dummy Potter study in Dragon Planet. Potter has a dog called Bobby and he loves it. He loves Maggie and he is Maggie's father.";
 
         Properties props = new Properties();
         props.setProperty("annotators", "tokenize,ssplit,pos,lemma,ner, parse,coref");
