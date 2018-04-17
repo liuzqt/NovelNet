@@ -14,6 +14,7 @@
 import numpy as np
 from module import Entity, Token
 from collections import deque
+import re
 
 
 class Relationship(object):
@@ -21,13 +22,15 @@ class Relationship(object):
     PERSON = 1
 
     def __init__(self, pipeline, text, threshold=25, debug=True):
+        pat = re.compile(r'\n+')
         self.mergeCount = 0
         self.debug = debug
         self.entityCount = 0
         self.threshold = threshold
         self.pipeline = pipeline
         self.entityMap = {}
-        self.entitySet = set()
+        # self.entitySet = set()
+        text = pat.sub(' ', text)
 
         tokens = self.parseCoref(text)
         self.parseRelationship(tokens)
@@ -36,7 +39,8 @@ class Relationship(object):
         # Noticed that the tokens are sorted in their text order
         queue = deque()
         for m in tokens:
-            while len(queue) > 0 and m.absPos - queue[0].absPos > self.threshold:
+            while len(queue) > 0 and m.absPos - queue[
+                0].absPos > self.threshold:
                 queue.popleft()
             for nb in set(queue):
                 self._happenRelationship(m.entity, nb.entity)
@@ -126,8 +130,7 @@ class Relationship(object):
                 filter(lambda x: x is not None, map(lambda x: x[1], ms_tuple)))
             if len(names) == 0:
                 if self.debug:
-                    print('empty chain, skip')
-                    print(ms)
+                    print('empty chain, skip', ms)
                 continue
             if self.debug:
                 print(names, ms)
@@ -183,7 +186,7 @@ class Relationship(object):
             merge = existing_ents[0]
             for to_merge in existing_ents[1:]:
                 # remove from entitySet
-                self.entitySet.remove(to_merge)
+                # self.entitySet.remove(to_merge)
                 # merge freq
                 merge.freq += to_merge.freq
                 # merge names
@@ -202,7 +205,7 @@ class Relationship(object):
             self.entityCount += 1
             ent = Entity(self.entityCount)
 
-        self.entitySet.add(ent)
+        # self.entitySet.add(ent)
         ent.names.update(names)
         ent.freq += count
         for name in ent.names:
@@ -219,7 +222,7 @@ class Relationship(object):
 
         ent.freq += 1
         ent.names.add(name)
-        self.entitySet.add(ent)
+        # self.entitySet.add(ent)
         self.entityMap[name] = ent
         tokens.append(Token(absPos=start_idx, name=name, entity=ent))
 
@@ -229,7 +232,8 @@ class Relationship(object):
 
     def __str__(self):
         report = ''
-        sortedEntity = sorted(self.entitySet, key=lambda x: x.freq,
+        sortedEntity = sorted(set(self.entityMap.values()),
+                              key=lambda x: x.freq,
                               reverse=True)
         report += "Entities sorted by frequency:\n"
         for ent in sortedEntity:
