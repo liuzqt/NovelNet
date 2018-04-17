@@ -21,7 +21,7 @@ class Entity(object):
         self.neighbors = {}
 
     def __str__(self):
-        return ','.join(self.names) + ":" + str(self.id)
+        return str(self.id) + ":" + str(list(self.names))
 
 
 class Token(object):
@@ -29,4 +29,3 @@ class Token(object):
         self.absPos = absPos
         self.name = name
         self.entity = entity
-

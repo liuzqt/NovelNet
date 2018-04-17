@@ -23,6 +23,7 @@ class Relationship(object):
 
     def __init__(self, pipeline, text, threshold=25, debug=True):
         pat = re.compile(r'\n+')
+        self.ner = set()
         self.mergeCount = 0
         self.debug = debug
         self.entityCount = 0
@@ -62,10 +63,13 @@ class Relationship(object):
 
         self.pipeline.continuous_coref(utterances=text)
         doc = self.pipeline.get_utterances()[0]
-        doc_text = [d.text for d in doc]
+        doc_text = [d.text.strip() for d in doc]
 
+        filtered_ner = list(
+            filter(lambda x: self._NERfilter(x), doc.ents))
         ner = np.zeros((len(doc)), dtype=np.int32)
-        for ent in doc.ents:
+        self.ner.update([str(e) for e in filtered_ner])
+        for ent in filtered_ner:
             ner[ent.start:ent.end] = 1
 
         # clusters id is corresponded to mentions
@@ -180,7 +184,7 @@ class Relationship(object):
             ent = existing_ents[0]
         elif len(existing_ents) > 1:
             # hopefully we won't meet this case
-            print('merge!!!')
+            print('merge!!!', [e.names for e in existing_ents])
             # merge entities
             self.mergeCount += len(existing_ents) - 1
             merge = existing_ents[0]
@@ -226,6 +230,10 @@ class Relationship(object):
         self.entityMap[name] = ent
         tokens.append(Token(absPos=start_idx, name=name, entity=ent))
 
+    def _NERfilter(self, e):
+        words = e.text.split()
+        return any(w[0].isupper() for w in e.text.split())
+
     @property
     def totalEntityNum(self):
         return self.entityCount - self.mergeCount
@@ -249,4 +257,8 @@ class Relationship(object):
         return report
 
     def report(self):
+        with open('./ner.txt', 'w') as f:
+            for ner in self.ner:
+                f.write(ner + '\n')
         print(self)
+        print(self.ner)
