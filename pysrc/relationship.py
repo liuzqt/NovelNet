@@ -196,6 +196,7 @@ class Relationship(object):
                         nb.neighbors.pop(to_merge)
                     else:
                         merge.neighbors.pop(to_merge)
+            ent = merge
         else:
             # create new one
             self.entityCount += 1
@@ -204,7 +205,7 @@ class Relationship(object):
         self.entitySet.add(ent)
         ent.names.update(names)
         ent.freq += count
-        for name in names:
+        for name in ent.names:
             self.entityMap[name] = ent
         return ent
 
