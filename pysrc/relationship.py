@@ -13,12 +13,17 @@
 '''
 import numpy as np
 from module import Entity, Token
-from collections import deque
+from collections import deque, Counter
 import re
+from word_similarity import isSimilar
+import pickle
+import os
+import json
+from module import MyMention, MyNER
 
 
 class Relationship(object):
-    pronoun = ["he", "she", "it", "him", "her", "they", "them", "this", "that"]
+    pronoun = {"he", "she", "it", "him", "her", "they", "them", "this", "that"}
     PERSON = 1
 
     def __init__(self, pipeline, text, threshold=25, debug=True):
@@ -30,18 +35,37 @@ class Relationship(object):
         self.threshold = threshold
         self.pipeline = pipeline
         self.entityMap = {}
-        # self.entitySet = set()
         text = pat.sub(' ', text)
 
         tokens = self.parseCoref(text)
         self.parseRelationship(tokens)
 
+    def export_graph(self):
+        '''
+        
+        :return: 
+        '''
+        ents = dict(
+            (ent, str(idx)) for idx, ent in enumerate(set(self.entityMap.values())))
+        output = []
+        for ent, i in ents.items():
+            temp = {'id': i,
+                    'freq': ent.freq,
+                    'names': list(ent.names),
+                    'neighbor': dict((ents[nb], weight)
+                                     for nb, weight in ent.neighbors.items())}
+            output.append(temp)
+        print(output)
+        with open('./graph.json', 'w') as f:
+            json.dump(output, f)
+        print('graph dumped to json.')
+
     def parseRelationship(self, tokens):
         # Noticed that the tokens are sorted in their text order
         queue = deque()
         for m in tokens:
-            while len(queue) > 0 and m.absPos - queue[
-                0].absPos > self.threshold:
+            while len(queue) > 0 and \
+                                    m.absPos - queue[0].absPos > self.threshold:
                 queue.popleft()
             for nb in set(queue):
                 self._happenRelationship(m.entity, nb.entity)
@@ -60,23 +84,41 @@ class Relationship(object):
 
     def parseCoref(self, text):
         tokens = []
+        if os.path.exists('./doc.pkl'):
+            print('pkl file detected!')
+            with open('doc.pkl', 'rb') as f:
+                doc = pickle.load(f)
+            with open('clusters.pkl', 'rb') as f:
+                clusters = pickle.load(f)
+            with open('mentions.pkl', 'rb') as f:
+                mentions = pickle.load(f)
+        else:
+            self.pipeline.continuous_coref(utterances=text)
+            doc = self.pipeline.get_utterances()[0]
 
-        self.pipeline.continuous_coref(utterances=text)
-        doc = self.pipeline.get_utterances()[0]
-        doc_text = [d.text.strip() for d in doc]
+            # clusters id is corresponding to mentions
+            clusters = self.pipeline.get_clusters(remove_singletons=True)[
+                0]  # ({1: [1], [1]}
+            mentions = [MyMention(m) for m in self.pipeline.get_mentions()]
 
-        filtered_ner = list(
-            filter(lambda x: self._NERfilter(x), doc.ents))
+            with open('doc.pkl', 'wb') as f:
+                pickle.dump(doc, f)
+            with open('clusters.pkl', 'wb') as f:
+                pickle.dump(clusters, f)
+            with open('mentions.pkl', 'wb') as f:
+                pickle.dump(mentions, f)
+
+        doc_text = [d.text.strip() for d in doc]  # list of tokens
+
+        filtered_ner = self._NERfilter(doc.ents)
+
         ner = np.zeros((len(doc)), dtype=np.int32)
         self.ner.update([str(e) for e in filtered_ner])
         for ent in filtered_ner:
             ner[ent.start:ent.end] = 1
 
-        # clusters id is corresponded to mentions
-        clusters = self.pipeline.get_clusters(remove_singletons=True)[
-            0]  # ({1: [1], [1]}
-        mentions = self.pipeline.get_mentions()
-        # this is useful when parsing NER, to avoid duplicate entry from Coref, identified as absPos
+        # this is useful when parsing NER, to avoid duplicate entry from Coref,
+        # identified as absPos
         token_map = {}
 
         if self.debug:
@@ -91,9 +133,10 @@ class Relationship(object):
 
         def name_filter(m):
             '''
-            check how many entity in this mention token, and cut the name to entity name
+            check how many entity in this mention token, and cut the name
+            
             :param m: 
-            :return: a tuple of (m, modify_name, absPos,display_name)
+            :return: a tuple of (m, modify_name, absPos, display_name)
             '''
 
             ents_span = []
@@ -113,8 +156,7 @@ class Relationship(object):
                         ents_span.append((start_idx, j))
             if len(ents_span) > 1:
                 # more than one entity
-                print('fuck!')
-                print(m.text)
+                print('more than one entity in one coref mention!', m.text)
             elif len(ents_span) == 1:
                 st, end = ents_span[0]
                 name = ' '.join(doc_text[st:end]).lower()
@@ -125,21 +167,27 @@ class Relationship(object):
         # parse Coref
         if self.debug:
             print('\n\nparsing coref.....\n')
-        for _, chain in clusters.items():
+        for wtf, chain in clusters.items():
+            print(wtf)
             # chain is only id for mention tokens
-            ms = [mentions[key] for key in chain]
+            ms = [mentions[idx] for idx in chain]
 
             ms_tuple = [name_filter(m) for m in ms]
             names = list(
-                filter(lambda x: x is not None, map(lambda x: x[1], ms_tuple)))
+                filter(lambda x: x is not None, (x[1] for x in ms_tuple)))
+
+            # if all entity names don't contains uppercase char
             if len(names) == 0:
                 if self.debug:
                     print('empty chain, skip', ms)
                 continue
+
             if self.debug:
                 print(names, ms)
-            ent = self._getEntity_coref(names=names, count=len(ms))
 
+            ent = self._getEntity_coref(names=names, count=len(ms))
+            if not ent:
+                continue
             for m, modified_name, absPos, display_name in ms_tuple:
                 token = Token(absPos, display_name, ent)
                 tokens.append(token)
@@ -173,11 +221,25 @@ class Relationship(object):
                 print("%s\t%d" % (tk.name, tk.absPos))
         return tokens
 
-    def _getEntity_coref(self, names, count):
+    def _getEntity_coref(self, names: list, count: int):
+        '''
+        
+        :param names: list of str. entity names (filtered, Upper char only)
+        :param count: occurrence count, used for update entity freq
+        :return: ent (could be None)
+        '''
 
         ent = None
+        # calculate word similarity to determine whether there're more than
+        # one entity
+        uniqNames, flag = self._coref_names_filter(names)
 
-        existing_ents = [self.entityMap[name] for name in names if
+        if not flag:
+            if self.debug:
+                print('wrong coref chain', names)
+            return ent
+
+        existing_ents = [self.entityMap[name] for name in uniqNames if
                          name in self.entityMap]
 
         if len(existing_ents) == 1:
@@ -185,6 +247,7 @@ class Relationship(object):
         elif len(existing_ents) > 1:
             # hopefully we won't meet this case
             print('merge!!!', [e.names for e in existing_ents])
+
             # merge entities
             self.mergeCount += len(existing_ents) - 1
             merge = existing_ents[0]
@@ -210,11 +273,42 @@ class Relationship(object):
             ent = Entity(self.entityCount)
 
         # self.entitySet.add(ent)
-        ent.names.update(names)
+        ent.names.update(uniqNames)
         ent.freq += count
         for name in ent.names:
             self.entityMap[name] = ent
         return ent
+
+    def _coref_names_filter(self, names, threshold=0.8):
+        '''
+        
+        :param names: names from coref chain
+        :return: uniqNames,flag
+        '''
+        # current implementation it to do longest-common-substring match pair-wise
+        nameDict = Counter(names)
+        uniqNames = list(nameDict.keys())
+        total = len(names)
+        mat = np.tile(np.array([nameDict[k] for k in uniqNames]),
+                      (len(uniqNames), 1))
+        for i in range(len(uniqNames) - 1):
+            for j in range(i + 1, len(uniqNames)):
+                if not isSimilar(uniqNames[i], uniqNames[i + 1]):
+                    mat[i][j] = mat[j][i] = 0
+        remain_inds = [i for i, row in enumerate(mat) if
+                       row.sum() / total >= threshold]
+        remain_mat = mat[remain_inds, :][:, remain_inds]
+        if (remain_mat == 0).sum() > 0:
+            print('flag2', nameDict)
+            return uniqNames, False
+        new_names = [uniqNames[i] for i in remain_inds]
+        print('flag4', new_names)
+        if 'potter' in new_names:
+            print('flag3')
+            print(nameDict)
+            print(remain_inds)
+            print(new_names)
+        return new_names, True
 
     def _getEntity_NER(self, start_idx, end_idx, doc_text, tokens):
         name = ' '.join(doc_text[start_idx:end_idx]).lower()
@@ -230,9 +324,33 @@ class Relationship(object):
         self.entityMap[name] = ent
         tokens.append(Token(absPos=start_idx, name=name, entity=ent))
 
-    def _NERfilter(self, e):
-        words = e.text.split()
-        return any(w[0].isupper() for w in e.text.split())
+    def _NERfilter(self, ners: list):
+        '''
+        cut ners, keep Upper case word only
+        :param ners: 
+        :return: 
+        '''
+        res = []
+        for e in ners:
+            words = e.text.split()
+            start_ind = 0
+            for w in words:
+                if w[0].isupper():
+                    break
+                else:
+                    start_ind += 1
+            if start_ind == len(words):
+                continue
+            end_ind = len(words)
+            for w in words[::-1]:
+                if w[0].isupper():
+                    break
+                else:
+                    end_ind -= 1
+            res.append(
+                MyNER(' '.join(words[start_ind:end_ind]), e.start, e.end))
+
+        return res
 
     @property
     def totalEntityNum(self):
@@ -262,3 +380,11 @@ class Relationship(object):
                 f.write(ner + '\n')
         print(self)
         print(self.ner)
+        names = set()
+        for e in set(self.entityMap.values()):
+            for name in e.names:
+                if name in names:
+                    print('duplicate name', name)
+                names.add(name)
+
+        print(len(self.entityMap), len(names))
