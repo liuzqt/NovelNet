@@ -1,6 +1,7 @@
+# NovelNet
 ##usage
 
-pls download [stanford CoreNLP](https://stanfordnlp.github.io/CoreNLP/), and add necessary jar dependency to my code.
+pls install [neuralcoref](https://github.com/huggingface/neuralcoref),and [spaCy](https://spacy.io/)
 
 ## pipeline
 
