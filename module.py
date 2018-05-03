@@ -29,3 +29,24 @@ class Token(object):
         self.absPos = absPos
         self.name = name
         self.entity = entity
+
+class MyNER:
+    def __init__(self, text, start, end):
+        self.text = text
+        self.start = start
+        self.end = end
+
+    def __str__(self):
+        return self.text
+
+
+class MyMention:
+    def __init__(self, m):
+        self.text = m.text
+        self.start = m.start
+        self.end = m.end
+
+    def __str__(self):
+        return self.text
+
+    __repr__ = __str__

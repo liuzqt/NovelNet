@@ -5,7 +5,7 @@
 @author: ZiqiLiu
 
 
-@file: test.py
+@file: main.py
 
 @time: 2018/4/13 下午5:19
 
@@ -25,3 +25,4 @@ with open("Harry_Potter_and_the_Sorcerers_Stone.txt", 'r') as f:
 relationship = Relationship(pipeline=coref, text=text, threshold=20, debug=True)
 
 relationship.report()
+relationship.export_graph()

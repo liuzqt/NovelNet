@@ -18,10 +18,12 @@ import re
 from word_similarity import isSimilar
 import pickle
 import os
+import json
+from module import MyMention, MyNER
 
 
 class Relationship(object):
-    pronoun = ["he", "she", "it", "him", "her", "they", "them", "this", "that"]
+    pronoun = {"he", "she", "it", "him", "her", "they", "them", "this", "that"}
     PERSON = 1
 
     def __init__(self, pipeline, text, threshold=25, debug=True):
@@ -33,18 +35,37 @@ class Relationship(object):
         self.threshold = threshold
         self.pipeline = pipeline
         self.entityMap = {}
-        # self.entitySet = set()
         text = pat.sub(' ', text)
 
         tokens = self.parseCoref(text)
         self.parseRelationship(tokens)
 
+    def export_graph(self):
+        '''
+        
+        :return: 
+        '''
+        ents = dict(
+            (ent, str(idx)) for idx, ent in enumerate(set(self.entityMap.values())))
+        output = []
+        for ent, i in ents.items():
+            temp = {'id': i,
+                    'freq': ent.freq,
+                    'names': list(ent.names),
+                    'neighbor': dict((ents[nb], weight)
+                                     for nb, weight in ent.neighbors.items())}
+            output.append(temp)
+        print(output)
+        with open('./graph.json', 'w') as f:
+            json.dump(output, f)
+        print('graph dumped to json.')
+
     def parseRelationship(self, tokens):
         # Noticed that the tokens are sorted in their text order
         queue = deque()
         for m in tokens:
-            while len(queue) > 0 and m.absPos - queue[
-                0].absPos > self.threshold:
+            while len(queue) > 0 and \
+                                    m.absPos - queue[0].absPos > self.threshold:
                 queue.popleft()
             for nb in set(queue):
                 self._happenRelationship(m.entity, nb.entity)
@@ -367,25 +388,3 @@ class Relationship(object):
                 names.add(name)
 
         print(len(self.entityMap), len(names))
-
-
-class MyNER:
-    def __init__(self, text, start, end):
-        self.text = text
-        self.start = start
-        self.end = end
-
-    def __str__(self):
-        return self.text
-
-
-class MyMention:
-    def __init__(self, m):
-        self.text = m.text
-        self.start = m.start
-        self.end = m.end
-
-    def __str__(self):
-        return self.text
-
-    __repr__ = __str__
