@@ -38,6 +38,7 @@ class Relationship(object):
         self.pipeline = pipeline
         self.entityMap = {}
         self.text = pat.sub(' ', text)
+        self.removed = set()
 
     def build_relationship(self):
         tokens = self.parseCoref(self.text)
@@ -68,6 +69,10 @@ class Relationship(object):
             (ent, str(idx)) for idx, ent in
             enumerate(set(self.entityMap.values())))
         output = []
+        nbs = set()
+        for e in ents:
+            nbs.update(e.neighbors.keys())
+        print('flag', len(ents), len(nbs))
         for ent, i in ents.items():
             temp = {'id': i,
                     'freq': ent.freq,
@@ -248,7 +253,7 @@ class Relationship(object):
         :param count: occurrence count, used for update entity freq
         :return: ent (could be None)
         '''
-
+        removed = None
         ent = None
         # calculate word similarity to determine whether there're more than
         # one entity
@@ -259,8 +264,8 @@ class Relationship(object):
                 print('wrong coref chain', names)
             return ent
 
-        existing_ents = [self.entityMap[name] for name in uniqNames if
-                         name in self.entityMap]
+        existing_ents = list(set(self.entityMap[name] for name in uniqNames if
+                                 name in self.entityMap))
 
         if len(existing_ents) == 1:
             ent = existing_ents[0]
@@ -271,10 +276,15 @@ class Relationship(object):
             print('uniqNames', uniqNames)
             # self._coref_names_filter(names, debug=True) # for debug purpose
 
+            removed = []
             # merge entities
             self.mergeCount += len(existing_ents) - 1
             merge = existing_ents[0]
             for to_merge in existing_ents[1:]:
+                removed.append(to_merge)
+                if to_merge in self.removed:
+                    print('fuck! remove twice!')
+                self.removed.add(to_merge)
                 # merge freq
                 merge.freq += to_merge.freq
                 # merge names
@@ -298,6 +308,11 @@ class Relationship(object):
         ent.freq += count
         for name in ent.names:
             self.entityMap[name] = ent
+        if removed:
+            temp = set(self.entityMap.values())
+            for r in removed:
+                if r in temp:
+                    print('fuck me!')
         return ent
 
     def _coref_names_filter(self, names, threshold=0.8, debug=False):
