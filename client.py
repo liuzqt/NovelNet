@@ -36,7 +36,10 @@ def runjob(joblist, machine_list):
         time.sleep(1)
     return True
 def check_machine(machine):
-    r = requests.get(machine)
+    try:
+        r = requests.get(machine)
+    except:
+        return False
     if r.status_code != 200:
         return False
     print(r.content)
@@ -46,7 +49,10 @@ def check_machine(machine):
         return False
 
 def assign(machine, job):
-    r = requests.get(machine,{'name':job})
+    try:
+        r = requests.get(machine,{'name':job})
+    except:
+        return False
     if r.status_code != 200:
         return False
     if r.content.decode("utf-8").startswith("start"):
@@ -54,10 +60,10 @@ def assign(machine, job):
     return False
 
 def main():
-    jobs = ['hp1_0', 'hp1_1', 'hp1_2', 'hp1_3', 'hp1_4', 'hp1_5', 'hp1_6', 'hp1_7', 'hp1_8',
-            'hp1_9', 'hp1_10', 'hp1_11', 'hp1_12', 'hp1_13', 'hp1_14', 'hp1_15', 'hp1_16', 'hp1_17']
-    #jobs = ['test1','test2','test3','test4','testtext']
-    machines = ["http://35.229.88.233:5000/job", "http://35.190.137.170:5000/job", "http://35.196.226.39:5000/job"]
+#    jobs = ['hp1_0', 'hp1_1', 'hp1_2', 'hp1_3', 'hp1_4', 'hp1_5', 'hp1_6', 'hp1_7', 'hp1_8',
+#            'hp1_9', 'hp1_10', 'hp1_11', 'hp1_12', 'hp1_13', 'hp1_14', 'hp1_15', 'hp1_16', 'hp1_17']
+    jobs = ['test1','test2','test3','test4','testtext','test1','test2']
+    machines = ["http://35.229.88.233:5000/job", "http://35.190.137.170:5000/job", "http://35.196.226.39:5000/job", "http//35.185.15.96:5000/job", "http://35.196.20.249:5000/job"]
     runjob(jobs, machines)
 
 if __name__ == '__main__':
