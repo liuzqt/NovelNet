@@ -266,7 +266,10 @@ class Relationship(object):
             ent = existing_ents[0]
         elif len(existing_ents) > 1:
             # hopefully we won't meet this case
+            print()
             print('merge!!!', [e.names for e in existing_ents])
+            print('uniqNames', uniqNames)
+            # self._coref_names_filter(names, debug=True) # for debug purpose
 
             # merge entities
             self.mergeCount += len(existing_ents) - 1
@@ -297,7 +300,7 @@ class Relationship(object):
             self.entityMap[name] = ent
         return ent
 
-    def _coref_names_filter(self, names, threshold=0.8):
+    def _coref_names_filter(self, names, threshold=0.8, debug=False):
         '''
         
         :param names: names from coref chain
@@ -313,6 +316,10 @@ class Relationship(object):
             for j in range(i + 1, len(uniqNames)):
                 if not isSimilar(uniqNames[i], uniqNames[i + 1]):
                     mat[i][j] = mat[j][i] = 0
+        if debug:
+            print('debug')
+            print(mat)
+            print(uniqNames)
         remain_inds = [i for i, row in enumerate(mat) if
                        row.sum() / total >= threshold]
         remain_mat = mat[remain_inds, :][:, remain_inds]
