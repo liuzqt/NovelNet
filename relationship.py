@@ -65,13 +65,15 @@ class Relationship(object):
         
         :return: 
         '''
-        ents = dict(
-            (ent, str(idx)) for idx, ent in
-            enumerate(set(self.entityMap.values())))
+        ents = dict((ent, str(idx)) for idx, ent in
+                    enumerate(set(self.entityMap.values())))
         output = []
         nbs = set()
         for e in ents:
             nbs.update(e.neighbors.keys())
+        for rm in self.removed:
+            if rm in nbs:
+                print('removed entity still in neighbors!', rm)
         print('flag', len(ents), len(nbs))
         for ent, i in ents.items():
             temp = {'id': i,
@@ -291,12 +293,13 @@ class Relationship(object):
                 merge.names.update(to_merge.names)
                 # merge neighbor
                 for nb, ct in to_merge.neighbors.items():
-                    if nb != merge:
+                    if nb in existing_ents:
+                        nb.neighbors.pop(to_merge)
+                    else:
                         merge.neighbors[nb] = merge.neighbors.get(nb, 0) + ct
                         nb.neighbors[merge] = nb.neighbors.get(merge, 0) + ct
                         nb.neighbors.pop(to_merge)
-                    else:
-                        merge.neighbors.pop(to_merge)
+
             ent = merge
         else:
             # create new one
