@@ -392,7 +392,7 @@ class Relationship(object):
         return report
 
     def report(self):
-        with open('./ner' + self.id + '.txt', 'w') as f:
+        with open('./ner' + str(self.id) + '.txt', 'w') as f:
             for ner in self.ner:
                 f.write(ner + '\n')
         print(self)
