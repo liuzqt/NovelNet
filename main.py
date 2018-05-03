@@ -38,6 +38,8 @@ def process_pkl(path='./pkls/', n=None):
     mentions = sorted(glob(path + 'mention*'))
     clusters = sorted(glob(path + 'cluster*'))
     assert len(docs) == len(mentions) == len(clusters)
+
+
     relationship = Relationship()
     relationship.build_relationship_from_pkl(docs[:n], clusters[:n],
                                              mentions[:n])

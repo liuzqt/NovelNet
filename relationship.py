@@ -26,7 +26,8 @@ class Relationship(object):
     pronoun = {"he", "she", "it", "him", "her", "they", "them", "this", "that"}
     PERSON = 1
 
-    def __init__(self, id=-1, pipeline=None, text='', threshold=25, verbose=True):
+    def __init__(self, id=-1, pipeline=None, text='', threshold=25,
+                 verbose=True):
         pat = re.compile(r'\n+')
         self.id = id
         self.ner = set()
@@ -48,7 +49,14 @@ class Relationship(object):
         print('total %d files to process' % len(doc_pkls))
         for doc, clusters, mentions in zip(doc_pkls, clusters_pkls,
                                            mentions_pkls):
-            tokens = self.parseCoref(None, doc, clusters, mentions)
+            print('processing %s,%s,%s...' % (doc, clusters, mentions))
+            with open(doc, 'rb') as f:
+                _doc = pickle.load(f)
+            with open(clusters, 'rb') as f:
+                _clusters = pickle.load(f)
+            with open(mentions, 'rb') as f:
+                _mentions = pickle.load(f)
+            tokens = self.parseCoref(None, _doc, _clusters, _mentions)
             self.parseRelationship(tokens)
 
     def export_graph(self):
