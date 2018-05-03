@@ -26,8 +26,9 @@ class Relationship(object):
     pronoun = {"he", "she", "it", "him", "her", "they", "them", "this", "that"}
     PERSON = 1
 
-    def __init__(self, pipeline, text, threshold=25, debug=True):
+    def __init__(self, id, pipeline, text, threshold=25, debug=True):
         pat = re.compile(r'\n+')
+        self.id = id
         self.ner = set()
         self.mergeCount = 0
         self.debug = debug
@@ -84,13 +85,16 @@ class Relationship(object):
 
     def parseCoref(self, text):
         tokens = []
-        if os.path.exists('./doc.pkl'):
+        doc_name = 'doc' + self.id + '.pkl'
+        clusters_name = 'clusters' + self.id + '.pkl'
+        mentions_name = 'mentions' + self.id + '.pkl'
+        if os.path.exists('./' + doc_name):
             print('pkl file detected!')
-            with open('doc.pkl', 'rb') as f:
+            with open(doc_name, 'rb') as f:
                 doc = pickle.load(f)
-            with open('clusters.pkl', 'rb') as f:
+            with open(clusters_name, 'rb') as f:
                 clusters = pickle.load(f)
-            with open('mentions.pkl', 'rb') as f:
+            with open(mentions_name, 'rb') as f:
                 mentions = pickle.load(f)
         else:
             self.pipeline.continuous_coref(utterances=text)
@@ -101,11 +105,11 @@ class Relationship(object):
                 0]  # ({1: [1], [1]}
             mentions = [MyMention(m) for m in self.pipeline.get_mentions()]
 
-            with open('doc.pkl', 'wb') as f:
+            with open(doc_name, 'wb') as f:
                 pickle.dump(doc, f)
-            with open('clusters.pkl', 'wb') as f:
+            with open(clusters_name, 'wb') as f:
                 pickle.dump(clusters, f)
-            with open('mentions.pkl', 'wb') as f:
+            with open(mentions_name, 'wb') as f:
                 pickle.dump(mentions, f)
 
         doc_text = [d.text.strip() for d in doc]  # list of tokens
