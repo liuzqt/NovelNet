@@ -58,7 +58,7 @@ def rnn(filename):
     with open("test", 'r') as f:
         text = f.read()
     #print(text)
-    relationship = Relationship(id=filename, pipeline=coref, text=text, threshold=20, debug=False)
+    relationship = Relationship(id=filename, pipeline=coref, text=text, threshold=20, verbose=False)
     relationship.report()
     doc_name = 'doc' + filename + '.pkl'
     clusters_name = 'clusters' + filename + '.pkl'

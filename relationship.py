@@ -19,18 +19,19 @@ from word_similarity import isSimilar
 import pickle
 import json
 from module import MyMention, MyNER
+from tqdm import tqdm
 
 
 class Relationship(object):
     pronoun = {"he", "she", "it", "him", "her", "they", "them", "this", "that"}
     PERSON = 1
 
-    def __init__(self, id=-1, pipeline=None, text='', threshold=25, debug=True):
+    def __init__(self, id=-1, pipeline=None, text='', threshold=25, verbose=True):
         pat = re.compile(r'\n+')
         self.id = id
         self.ner = set()
         self.mergeCount = 0
-        self.debug = debug
+        self.verbose = verbose
         self.entityCount = 0
         self.threshold = threshold
         self.pipeline = pipeline
@@ -44,6 +45,7 @@ class Relationship(object):
     def build_relationship_from_pkl(self, doc_pkls, clusters_pkls,
                                     mentions_pkls):
         assert len(doc_pkls) == len(clusters_pkls) == len(mentions_pkls)
+        print('total %d files to process' % len(doc_pkls))
         for doc, clusters, mentions in zip(doc_pkls, clusters_pkls,
                                            mentions_pkls):
             tokens = self.parseCoref(None, doc, clusters, mentions)
@@ -128,7 +130,7 @@ class Relationship(object):
         # identified as absPos
         token_map = {}
 
-        if self.debug:
+        if self.verbose:
             print('%d chain detected.' % len(clusters))
             name_clusters = [
                 [(mentions[idx].text, mentions[idx].start) for idx in cluster]
@@ -172,7 +174,7 @@ class Relationship(object):
                 ents_span) > 0 else m.start, display_name
 
         # parse Coref
-        if self.debug:
+        if self.verbose:
             print('\n\nparsing coref.....\n')
         for wtf, chain in clusters.items():
             print(wtf)
@@ -185,11 +187,11 @@ class Relationship(object):
 
             # if all entity names don't contains uppercase char
             if len(names) == 0:
-                if self.debug:
+                if self.verbose:
                     print('empty chain, skip', ms)
                 continue
 
-            if self.debug:
+            if self.verbose:
                 print(names, ms)
 
             ent = self._getEntity_coref(names=names, count=len(ms))
@@ -222,7 +224,7 @@ class Relationship(object):
                                             doc_text=doc_text, tokens=tokens)
 
         tokens.sort(key=lambda x: x.absPos)
-        if self.debug:
+        if self.verbose:
             print("\n\ntokens sorted in text order:")
             for tk in tokens:
                 print("%s\t%d" % (tk.name, tk.absPos))
@@ -242,7 +244,7 @@ class Relationship(object):
         uniqNames, flag = self._coref_names_filter(names)
 
         if not flag:
-            if self.debug:
+            if self.verbose:
                 print('wrong coref chain', names)
             return ent
 
@@ -382,7 +384,7 @@ class Relationship(object):
         return report
 
     def report(self):
-        with open('./ner'+ self.id +'.txt', 'w') as f:
+        with open('./ner' + self.id + '.txt', 'w') as f:
             for ner in self.ner:
                 f.write(ner + '\n')
         print(self)
