@@ -17,7 +17,6 @@ from collections import deque, Counter
 import re
 from word_similarity import isSimilar
 import pickle
-import os
 import json
 from module import MyMention, MyNER
 
@@ -26,7 +25,7 @@ class Relationship(object):
     pronoun = {"he", "she", "it", "him", "her", "they", "them", "this", "that"}
     PERSON = 1
 
-    def __init__(self, id, pipeline, text, threshold=25, debug=True):
+    def __init__(self, id=-1, pipeline=None, text='', threshold=25, debug=True):
         pat = re.compile(r'\n+')
         self.id = id
         self.ner = set()
@@ -36,10 +35,19 @@ class Relationship(object):
         self.threshold = threshold
         self.pipeline = pipeline
         self.entityMap = {}
-        text = pat.sub(' ', text)
+        self.text = pat.sub(' ', text)
 
-        tokens = self.parseCoref(text)
+    def build_relationship(self):
+        tokens = self.parseCoref(self.text)
         self.parseRelationship(tokens)
+
+    def build_relationship_from_pkl(self, doc_pkls, clusters_pkls,
+                                    mentions_pkls):
+        assert len(doc_pkls) == len(clusters_pkls) == len(mentions_pkls)
+        for doc, clusters, mentions in zip(doc_pkls, clusters_pkls,
+                                           mentions_pkls):
+            tokens = self.parseCoref(None, doc, clusters, mentions)
+            self.parseRelationship(tokens)
 
     def export_graph(self):
         '''
@@ -84,20 +92,10 @@ class Relationship(object):
             e1.neighbors[e2] = e1.neighbors.get(e2, 0) + 1
             e2.neighbors[e1] = e2.neighbors.get(e1, 0) + 1
 
-    def parseCoref(self, text):
+    def parseCoref(self, text, doc=None, clusters=None, mentions=None):
         tokens = []
-        doc_name = 'doc' + self.id + '.pkl'
-        clusters_name = 'clusters' + self.id + '.pkl'
-        mentions_name = 'mentions' + self.id + '.pkl'
-        if os.path.exists('./' + doc_name):
-            print('pkl file detected!')
-            with open(doc_name, 'rb') as f:
-                doc = pickle.load(f)
-            with open(clusters_name, 'rb') as f:
-                clusters = pickle.load(f)
-            with open(mentions_name, 'rb') as f:
-                mentions = pickle.load(f)
-        else:
+
+        if text:
             self.pipeline.continuous_coref(utterances=text)
             doc = self.pipeline.get_utterances()[0]
 
@@ -105,6 +103,10 @@ class Relationship(object):
             clusters = self.pipeline.get_clusters(remove_singletons=True)[
                 0]  # ({1: [1], [1]}
             mentions = [MyMention(m) for m in self.pipeline.get_mentions()]
+
+            doc_name = 'doc' + str(self.id) + '.pkl'
+            clusters_name = 'clusters' + str(self.id) + '.pkl'
+            mentions_name = 'mentions' + str(self.id) + '.pkl'
 
             with open(doc_name, 'wb') as f:
                 pickle.dump(doc, f)

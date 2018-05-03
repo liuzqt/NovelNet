@@ -14,15 +14,26 @@
 
 from relationship import Relationship
 from neuralcoref import Coref
+from glob import glob
 
-coref = Coref()
+def process_text(path='Harry_Potter_and_the_Sorcerers_Stone.txt'):
 
-text = "Stan Smith study in Pittsburgh, and he has a beautiful daughter called Annie. Smith is a teacher of Alex. Alex is a good boy and he is handsome. Bobby is a dog. The driver is stupid."
+    coref = Coref()
 
-with open("Harry_Potter_and_the_Sorcerers_Stone.txt", 'r') as f:
-    text = f.read()
+    text = "Stan Smith study in Pittsburgh, and he has a beautiful daughter called Annie. Smith is a teacher of Alex. Alex is a good boy and he is handsome. Bobby is a dog. The driver is stupid."
 
-relationship = Relationship(pipeline=coref, text=text, threshold=20, debug=True)
+    with open("Harry_Potter_and_the_Sorcerers_Stone.txt", 'r') as f:
+        text = f.read()
 
-relationship.report()
-relationship.export_graph()
+    relationship = Relationship(0, pipeline=coref, text=text, threshold=20,
+                                debug=True)
+    relationship.build_relationship()
+    relationship.report()
+    relationship.export_graph()
+
+def process_pkl():
+    coref = Coref()
+
+
+if __name__ == '__main__':
+    process_pkl()
