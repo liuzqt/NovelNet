@@ -75,6 +75,14 @@ class Relationship(object):
             if rm in nbs:
                 print('removed entity still in neighbors!', rm)
         print('flag', len(ents), len(nbs))
+        for nb in nbs:
+            if nb is None:
+                print('nb is None!')
+            if nb not in ents:
+                if nb in self.removed:
+                    print('not in ents but in removed')
+                else:
+                    print('not in ents and not in removed')
         for ent, i in ents.items():
             temp = {'id': i,
                     'freq': ent.freq,
@@ -91,13 +99,13 @@ class Relationship(object):
     def parseRelationship(self, tokens):
         # Noticed that the tokens are sorted in their text order
         queue = deque()
-        for m in tokens:
-            while len(queue) > 0 and \
-                                    m.absPos - queue[0].absPos > self.threshold:
+        for token in tokens:
+            while len(queue) > 0 \
+                    and token.absPos - queue[0].absPos > self.threshold:
                 queue.popleft()
-            for nb in set(queue):
-                self._happenRelationship(m.entity, nb.entity)
-            queue.append(m)
+            for nb in queue:
+                self._happenRelationship(token.entity, nb.entity)
+            queue.append(token)
 
     def _happenRelationship(self, e1: Entity, e2: Entity):
         '''
@@ -160,7 +168,7 @@ class Relationship(object):
             '''
             check how many entity in this mention token, and cut the name
             
-            :param m: 
+            :param m: Mention Token
             :return: a tuple of (m, modify_name, absPos, display_name)
             '''
 
@@ -186,6 +194,7 @@ class Relationship(object):
             elif len(ents_span) == 1:
                 st, end = ents_span[0]
                 name = ' '.join(doc_text[st:end]).lower()
+
             display_name = name if name is not None else m.text
             return m, name, ents_span[0][0] if len(
                 ents_span) > 0 else m.start, display_name
@@ -220,6 +229,13 @@ class Relationship(object):
                 tokens.append(token)
                 token_map[absPos] = token
 
+        # important!
+        # some tokens' entity might be removed during the merge process
+        # so we need to substitute it
+        for tk in tokens:
+            if tk.entity in self.removed:
+                tk.entity = self.entityMap[next(iter(tk.entity.names))]
+
         # parse NER
 
         start_idx = -1
@@ -242,6 +258,7 @@ class Relationship(object):
                                             doc_text=doc_text, tokens=tokens)
 
         tokens.sort(key=lambda x: x.absPos)
+
         if self.verbose:
             print("\n\ntokens sorted in text order:")
             for tk in tokens:
@@ -312,10 +329,13 @@ class Relationship(object):
         for name in ent.names:
             self.entityMap[name] = ent
         if removed:
-            temp = set(self.entityMap.values())
+            nbs = set()
+            for e in set(self.entityMap.values()):
+                nbs.update(e.neighbors.keys())
+            # nbs = set(self.entityMap.values())
             for r in removed:
-                if r in temp:
-                    print('fuck me!')
+                if r in nbs:
+                    print('flag6')
         return ent
 
     def _coref_names_filter(self, names, threshold=0.8, debug=False):
@@ -358,7 +378,6 @@ class Relationship(object):
 
         ent.freq += 1
         ent.names.add(name)
-        # self.entitySet.add(ent)
         self.entityMap[name] = ent
         tokens.append(Token(absPos=start_idx, name=name, entity=ent))
 

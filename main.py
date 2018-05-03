@@ -40,7 +40,7 @@ def process_pkl(path='./pkls/', n=None):
     assert len(docs) == len(mentions) == len(clusters)
 
 
-    relationship = Relationship()
+    relationship = Relationship(verbose=False)
     relationship.build_relationship_from_pkl(docs[:n], clusters[:n],
                                              mentions[:n])
     relationship.report()
@@ -48,4 +48,4 @@ def process_pkl(path='./pkls/', n=None):
 
 
 if __name__ == '__main__':
-    process_pkl(n=1)
+    process_pkl()
