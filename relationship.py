@@ -75,7 +75,8 @@ class Relationship(object):
                     'neighbor': dict((ents[nb], weight)
                                      for nb, weight in ent.neighbors.items())}
             output.append(temp)
-        print(output)
+        if self.verbose:
+            print(output)
         with open('./graph.json', 'w') as f:
             json.dump(output, f)
         print('graph dumped to json.')
@@ -173,7 +174,8 @@ class Relationship(object):
                         ents_span.append((start_idx, j))
             if len(ents_span) > 1:
                 # more than one entity
-                print('more than one entity in one coref mention!', m.text)
+                if self.verbose:
+                    print('more than one entity in one coref mention!', m.text)
             elif len(ents_span) == 1:
                 st, end = ents_span[0]
                 name = ' '.join(doc_text[st:end]).lower()
@@ -185,7 +187,8 @@ class Relationship(object):
         if self.verbose:
             print('\n\nparsing coref.....\n')
         for wtf, chain in clusters.items():
-            print(wtf)
+            if self.verbose:
+                print(wtf)
             # chain is only id for mention tokens
             ms = [mentions[idx] for idx in chain]
 
@@ -269,8 +272,6 @@ class Relationship(object):
             self.mergeCount += len(existing_ents) - 1
             merge = existing_ents[0]
             for to_merge in existing_ents[1:]:
-                # remove from entitySet
-                # self.entitySet.remove(to_merge)
                 # merge freq
                 merge.freq += to_merge.freq
                 # merge names
@@ -316,15 +317,10 @@ class Relationship(object):
                        row.sum() / total >= threshold]
         remain_mat = mat[remain_inds, :][:, remain_inds]
         if (remain_mat == 0).sum() > 0:
-            print('flag2', nameDict)
+            if self.verbose:
+                print('flag2', nameDict)
             return uniqNames, False
         new_names = [uniqNames[i] for i in remain_inds]
-        print('flag4', new_names)
-        if 'potter' in new_names:
-            print('flag3')
-            print(nameDict)
-            print(remain_inds)
-            print(new_names)
         return new_names, True
 
     def _getEntity_NER(self, start_idx, end_idx, doc_text, tokens):
