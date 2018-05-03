@@ -24,16 +24,22 @@ def runjob(joblist, machine_list):
         while flag == 0:
             for m in machine_list:
                 if check_machine(m):
-                    assign(m, j)
-                    flag = 1
-                    break
+                    if assign(m, j):
+                        flag = 1
+                        break
             time.sleep(60)
 
 def check_machine(machine):
-    return True
+    r = requests.get(machine)
+    if r.content == "The server is idle":
+        return True
+    else:
+        return False
 
 def assign(machine, job):
-    pass
+    r = requests.get(machine,{'name':job})
+    if r.content.startswith("start"):
+        return True
 
 def main():
-    pass
+    job = []

@@ -25,9 +25,9 @@ import os
 executor = ThreadPoolExecutor(2)
 app = Flask(__name__)
 
-@app.route('/job')
+@app.route('/')
 def heartbeat():
-    return "I am ready"
+    return "I am alive"
 
 
 
@@ -38,6 +38,9 @@ def runjob():
             id = f.read()
         return "this server is running file " + id
     filename = request.args.get('name', '')
+    if filename == '':
+        return "The server is idle"
+    print(filename)
     with open('status', 'w') as f:
         f.write(filename)
     executor.submit(rnn, filename)
@@ -51,7 +54,7 @@ def rnn(filename):
     coref = Coref()
     print("job " + filename + " is started")
     s3 = boto3.resource('s3')
-    s3.Object("novelnet", "testtext").download_file("test")
+    s3.Object("novelnet", filename).download_file("test")
     with open("test", 'r') as f:
         text = f.read()
     print(text)
