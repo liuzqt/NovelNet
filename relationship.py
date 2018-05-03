@@ -46,7 +46,8 @@ class Relationship(object):
         :return: 
         '''
         ents = dict(
-            (ent, str(idx)) for idx, ent in enumerate(set(self.entityMap.values())))
+            (ent, str(idx)) for idx, ent in
+            enumerate(set(self.entityMap.values())))
         output = []
         for ent, i in ents.items():
             temp = {'id': i,
@@ -71,7 +72,7 @@ class Relationship(object):
                 self._happenRelationship(m.entity, nb.entity)
             queue.append(m)
 
-    def _happenRelationship(self, e1, e2):
+    def _happenRelationship(self, e1: Entity, e2: Entity):
         '''
         
         :param e1: Entity 
