@@ -19,13 +19,18 @@ import pickle
 import json
 from module import MyMention, MyNER
 from functools import reduce
+import os
 
 
 class RelationshipGolden(object):
     PERSON = 1
 
     def __init__(self, charList, id=-1, pipeline=None, text='', threshold=25,
-                 verbose=True):
+                 verbose=True, outputPath='./output/'):
+        if os.path.exists(outputPath):
+            os.rmdir(outputPath)
+        os.mkdir(outputPath)
+        self.outputPath = outputPath
         pat = re.compile(r'\n+')
         self.id = id
         self.verbose = verbose
@@ -71,6 +76,7 @@ class RelationshipGolden(object):
         assert len(self.text) > 0
         tokens = self.parseCoref(self.text)
         self.parseRelationship(tokens)
+        self.parseRelationshipSentence()
         self._adjustForFamily()
 
     def build_relationship_from_pkl(self, doc_pkls, clusters_pkls,
@@ -89,6 +95,7 @@ class RelationshipGolden(object):
             self.initState()
             tokens = self.parseCoref(None, _doc, _clusters, _mentions)
             self.parseRelationship(tokens)
+            self.parseRelationshipSentence()
         self._adjustForFamily()
 
     def export_graph(self):
@@ -108,7 +115,7 @@ class RelationshipGolden(object):
             output.append(temp)
         if self.verbose:
             print(output)
-        with open('./graph.json', 'w') as f:
+        with open(self.outputPath + 'graph.json', 'w') as f:
             json.dump(output, f)
         print('graph dumped to json.')
 
@@ -506,12 +513,29 @@ class RelationshipGolden(object):
 
     def parseRelationshipSentence(self):
         for sentId, charsId in self.temp_relationship.items():
+            temp = list(charsId)
+            names = [self.id2char[id] for id in temp]
+            print('sentence', sentId, charsId)
             st, end = self.sentsId2span[sentId]
-            self.relationship.append((self.doc[st:end].text, list(charsId)))
+            self.relationship.append(
+                (self.doc[st:end].text, list(charsId), names))
 
     def exportRelationshipSentence(self):
-        with open('./relationshipSentence.pkl', 'wb') as f:
+        with open(self.outputPath + 'relationshipSentence.pkl', 'wb') as f:
             pickle.dump(self.relationship, f)
+
+    def exportEntityMapping(self):
+        with open(self.outputPath + 'id2char.pkl', 'wb') as  f:
+            pickle.dump(self.id2char, f)
+        with open(self.outputPath + 'family2charId.pkl', 'wb') as f:
+            pickle.dump(self.family2charId, f)
+        with open(self.outputPath + 'charId2family.pkl', 'wb') as f:
+            pickle.dump(self.char2family, f)
+
+    def exportAll(self):
+        self.export_graph()
+        self.exportRelationshipSentence()
+        self.exportEntityMapping()
 
     def __str__(self):
         sortedEntity = sorted(set(self.entityMap.values()),

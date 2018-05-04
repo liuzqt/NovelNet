@@ -44,8 +44,7 @@ def process_pkl(path='./pkls/', n=None, charList=None):
     relationship.build_relationship_from_pkl(docs[:n], clusters[:n],
                                              mentions[:n])
     relationship.report()
-    relationship.export_graph()
-    relationship.exportRelationshipSentence()
+    relationship.exportAll()
 
 
 if __name__ == '__main__':
