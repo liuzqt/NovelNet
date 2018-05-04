@@ -12,33 +12,55 @@
 @desc:
 '''
 import numpy as np
-from module import Entity, Token
-from collections import deque, Counter
+from module import Entity2, Token
+from collections import deque, defaultdict
 import re
-from word_similarity import isSimilar
 import pickle
 import json
 from module import MyMention, MyNER
-from tqdm import tqdm
+from functools import reduce
 
 
-class Relationship(object):
-    pronoun = {"he", "she", "it", "him", "her", "they", "them", "this", "that"}
+class RelationshipGolden(object):
     PERSON = 1
 
-    def __init__(self, id=-1, pipeline=None, text='', threshold=25,
+    def __init__(self, charList, id=-1, pipeline=None, text='', threshold=25,
                  verbose=True):
         pat = re.compile(r'\n+')
         self.id = id
-        self.ner = set()
-        self.mergeCount = 0
         self.verbose = verbose
-        self.entityCount = 0
         self.threshold = threshold
         self.pipeline = pipeline
         self.entityMap = {}
         self.text = pat.sub(' ', text)
-        self.removed = set()
+
+        i = 0
+        self.char2id = {}
+        self.id2char = defaultdict(list)
+        self.family = set()
+        self.family2char = defaultdict(list)
+        self.char2family = {}
+        single_character = charList['null']
+        for char in single_character:
+            words = char.split()
+            for w in words:
+                self.char2id[w] = i
+            self.id2char[i] = words
+            i += 1
+        del charList['null']
+        for family in charList:
+            self.family.add(family)
+            for char in charList[family]:
+                words = char.split()
+                for w in words:
+                    self.char2id[w] = i
+                    self.family2char[family].append(i)
+                self.id2char[i] = words
+                self.char2family[i] = family
+                i += 1
+        print(self.family)
+        print(self.char2id)
+        print(self.id2char)
 
     def build_relationship(self):
         tokens = self.parseCoref(self.text)
@@ -65,6 +87,7 @@ class Relationship(object):
         
         :return: 
         '''
+        return
         ents = dict((ent, str(idx)) for idx, ent in
                     enumerate(set(self.entityMap.values())))
         output = []
@@ -97,7 +120,7 @@ class Relationship(object):
                 self._happenRelationship(token.entity, nb.entity)
             queue.append(token)
 
-    def _happenRelationship(self, e1: Entity, e2: Entity):
+    def _happenRelationship(self, e1: Entity2, e2: Entity2):
         '''
         
         :param e1: Entity 
@@ -131,12 +154,12 @@ class Relationship(object):
             with open(mentions_name, 'wb') as f:
                 pickle.dump(mentions, f)
 
-        doc_text = [d.text.strip() for d in doc]  # list of tokens
+        doc_text = [d.text.strip().lower() for d in doc]  # list of tokens
 
         filtered_ner = self._NERfilter(doc.ents)
 
         ner = np.zeros((len(doc)), dtype=np.int32)
-        self.ner.update([str(e) for e in filtered_ner])
+
         for ent in filtered_ner:
             ner[ent.start:ent.end] = 1
 
@@ -183,7 +206,9 @@ class Relationship(object):
                     print('more than one entity in one coref mention!', m.text)
             elif len(ents_span) == 1:
                 st, end = ents_span[0]
-                name = ' '.join(doc_text[st:end]).lower()
+                name = ' '.join(doc_text[st:end])
+                if name == '':
+                    raise Exception('fuck')
 
             display_name = name if name is not None else m.text
             return m, name, ents_span[0][0] if len(
@@ -202,7 +227,7 @@ class Relationship(object):
             names = list(
                 filter(lambda x: x is not None, (x[1] for x in ms_tuple)))
 
-            # if all entity names don't contains uppercase char
+            # no valid entity name
             if len(names) == 0:
                 if self.verbose:
                     print('empty chain, skip', ms)
@@ -218,14 +243,6 @@ class Relationship(object):
                 token = Token(absPos, display_name, ent)
                 tokens.append(token)
                 token_map[absPos] = token
-
-        # important!
-        # some tokens' entity might be removed during the merge process
-        # so we need to substitute it
-        for tk in tokens:
-            if tk.entity in self.removed:
-                tk.entity = self.entityMap[next(iter(tk.entity.names))]
-        temp = set(self.entityMap.values())
 
         # parse NER
 
@@ -261,141 +278,197 @@ class Relationship(object):
         
         :param names: list of str. entity names (filtered, Upper char only)
         :param count: occurrence count, used for update entity freq
-        :return: ent (could be None)
+        :return: ent (could be None) if only family name appear, 
+        then return family entity
         '''
-        removed = None
         ent = None
-        # calculate word similarity to determine whether there're more than
-        # one entity
-        uniqNames, flag = self._coref_names_filter(names)
+
+        uniqNames, flag, minus_count = self._coref_names_filter(names)
 
         if not flag:
             if self.verbose:
                 print('wrong coref chain', names)
             return ent
+        existing_ents = set()
+        for n in uniqNames:
+            if n in self.char2id:
+                if self.char2id[n] in self.entityMap:
+                    existing_ents.add(self.entityMap[self.char2id[n]])
+            elif n in self.family:
+                if n in self.entityMap:
+                    existing_ents.add(self.entityMap[n])
+            else:
+                raise Exception('sth wrong here')
 
-        existing_ents = list(set(self.entityMap[name] for name in uniqNames if
-                                 name in self.entityMap))
+        if len(existing_ents) >= 2:
+            print(existing_ents)
+            print(uniqNames)
+            raise Exception('sth wrong here')
 
         if len(existing_ents) == 1:
-            ent = existing_ents[0]
-        elif len(existing_ents) > 1:
-            # hopefully we won't meet this case
-            print()
-            print('merge!!!', [e.names for e in existing_ents])
-            print('uniqNames', uniqNames)
-            # self._coref_names_filter(names, debug=True) # for debug purpose
-
-            removed = []
-            # merge entities
-            self.mergeCount += len(existing_ents) - 1
-            merge = existing_ents[0]
-            for to_merge in existing_ents[1:]:
-                removed.append(to_merge)
-                self.removed.add(to_merge)
-                # merge freq
-                merge.freq += to_merge.freq
-                # merge names
-                merge.names.update(to_merge.names)
-                # merge neighbor
-                for nb, ct in to_merge.neighbors.items():
-                    if nb in existing_ents:
-                        nb.neighbors.pop(to_merge)
-                    else:
-                        merge.neighbors[nb] = merge.neighbors.get(nb, 0) + ct
-                        nb.neighbors[merge] = nb.neighbors.get(merge, 0) + ct
-                        nb.neighbors.pop(to_merge)
-
-            ent = merge
+            ent = list(existing_ents)[0]
         else:
             # create new one
-            self.entityCount += 1
-            ent = Entity(self.entityCount)
 
+            isChar = True if uniqNames[0] in self.char2id else False
+            print('create new', uniqNames, isChar)
+            key = self.char2id[uniqNames[0]] if isChar else uniqNames[0]
+            ent = Entity2(id=key, family=not isChar)
+            self.entityMap[key] = ent
         ent.names.update(uniqNames)
-        ent.freq += count
-        for name in ent.names:
-            self.entityMap[name] = ent
+        # if not self.check(ent.names):
+        #     print(uniqNames)
+        #     print(ent.names)
+        #     raise Exception('fuckoff')
+        ent.freq += count - minus_count
         return ent
+
+    # def check(self, names):
+    #     names = list(names)
+    #     if names[0] in self.char2id:
+    #         if any(n in self.family for n in names):
+    #             return False
+    #         if len(set(self.char2id[n] for n in names)) > 1:
+    #             return False
+    #     else:
+    #         if any(n in self.char2id for n in names):
+    #             return False
+    #         if len(names) > 1:
+    #             return False
+    #     return True
 
     def _coref_names_filter(self, names, threshold=0.8, debug=False):
         '''
         
         :param names: names from coref chain
-        :return: uniqNames,flag
+        :return: uniqNames : list of str, flag: bool
         '''
-        # current implementation it to do longest-common-substring match pair-wise
-        nameDict = Counter(names)
-        uniqNames = list(nameDict.keys())
-        total = len(names)
-        mat = np.tile(np.array([nameDict[k] for k in uniqNames]),
-                      (len(uniqNames), 1))
-        for i in range(len(uniqNames) - 1):
-            for j in range(i + 1, len(uniqNames)):
-                if not isSimilar(uniqNames[i], uniqNames[i + 1]):
-                    mat[i][j] = mat[j][i] = 0
+        flatten_names = reduce(lambda a, b: a + b,
+                               [name.split() for name in names])
+        family = set()
+        char = set()
+        charDict = defaultdict(int)
+        for n in flatten_names:
+            if n in self.family:
+                family.add(n)
+            elif n in self.char2id:
+                charDict[self.char2id[n]] += 1
+                char.add(n)
+            else:
+                print(names)
+                print(n)
+                print(flatten_names)
+                raise Exception('sth wrong here')
 
-        remain_inds = [i for i, row in enumerate(mat) if
-                       row.sum() / total >= threshold]
-        if len(remain_inds) == 0:
-            return [], False
-        remain_mat = mat[remain_inds, :][:, remain_inds]
-        if debug:
-            print('debug')
-            print(mat)
-            print(uniqNames)
-            print(remain_mat)
-        if (remain_mat == 0).sum() > 0:
-            if self.verbose:
-                print('flag2', nameDict)
-            return uniqNames, False
-        new_names = [uniqNames[i] for i in remain_inds]
-        return new_names, True
+        if len(family) > 1:
+            print('more than one family!', family)
+            return [], False, 0
+        if len(charDict) == 0:
+            # only family name appear
+            if len(family) == 0:
+                print(names)
+                print(flatten_names)
+                raise Exception('sth wrong here')
+            return list(family), True, 0
+        elif len(charDict) == 1:
+            return list(char), True, 0
+        else:
+            # more than one entity in this chain
+            freqTuple = sorted(charDict.items(), key=lambda x: -x[1])
+            total = sum(charDict.values())
+            if freqTuple[0][1] / total > threshold:
+
+                return [n for n in char if
+                        n in self.id2char[freqTuple[0][0]]], True, \
+                       total - freqTuple[0][1]
+            else:
+                return [], False, 0
 
     def _getEntity_NER(self, start_idx, end_idx, doc_text, tokens):
-        name = ' '.join(doc_text[start_idx:end_idx]).lower()
-        if name in self.entityMap:
-            ent = self.entityMap[name]
+        names = doc_text[start_idx:end_idx]
+        char_name = []
+        family_name = set()
+        isChar = False
+        charIDs = set()
+        ent_char = None
+        ent_family = None
+        for n in names:
+            if n in self.char2id:
+                char_name.append(n)
+                charIDs.add(self.char2id[n])
+                if self.char2id[n] in self.entityMap:
+                    ent_char = self.entityMap[self.char2id[n]]
+            if n in self.family:
+                family_name.add(n)
+                if n in self.entityMap:
+                    ent_family = self.entityMap[n]
+        if len(charIDs) > 1 or len(family_name) > 1:
+            return
+        if ent_char:
+            ent = ent_char
+            isChar = True
+        elif ent_family:
+            ent = ent_family
         else:
-            self.entityCount += 1
-            ent = Entity(self.entityCount)
+            # create new one
+            isChar = len(char_name) > 0
+            key = self.char2id[names[0]] if isChar else names[0]
+            ent = Entity2(id=key, family=not isChar)
+            self.entityMap[key] = ent
 
         ent.freq += 1
-        ent.names.add(name)
-        self.entityMap[name] = ent
-        tokens.append(Token(absPos=start_idx, name=name, entity=ent))
+        ent.names.update(char_name if isChar else family_name)
+        # if not self.check(ent.names):
+        #     print(ent.names)
+        #     raise Exception('fuck111')
+
+        tokens.append(Token(absPos=start_idx, name=' '.join(names), entity=ent))
+
+    def _getSpan(self, arr):
+        '''
+        
+        :param arr: list of 0 and 1
+        :return: 
+        '''
+        span = []
+        start_ind = None
+        flag = False
+        for i, w in enumerate(arr):
+            if w:
+                if not flag:
+                    start_ind = i
+                    flag = True
+                if i == len(arr) - 1:
+                    span.append((start_ind, i + 1))
+            else:
+                if flag:
+                    span.append((start_ind, i))
+                    flag = False
+        return span
 
     def _NERfilter(self, ners: list):
         '''
         cut ners, keep Upper case word only
         :param ners: 
-        :return: 
+        :return: list of MyNer
         '''
         res = []
         for e in ners:
-            start_ind = -1
-            for i in range(e.start, e.end):
-                if e.doc[i][0].isupper():
-                    start_ind = i
-                    break
-            if start_ind == -1:
-                continue
-            end_ind = -1
-            for i in range(e.end - 1, e.start - 1, -1):
-                if e.doc[i][0].isupper():
-                    end_ind = i + 1
-                    break
-            res.append(
-                MyNER((e.doc[start_ind:end_ind]).text, start_ind, end_ind))
+            arr = [1 if self.validEntity(e.doc[i].text.strip().lower()) else 0
+                   for i in range(e.start, e.end)]
+            span = self._getSpan(arr)
+
+            for start, end in span:
+                res.append(
+                    MyNER(e.doc[start:end].text.lower(), e.start + start,
+                          e.start + end))
 
         return res
 
-    @property
-    def totalEntityNum(self):
-        return self.entityCount - self.mergeCount
+    def validEntity(self, word):
+        return word in self.char2id or word in self.family
 
     def __str__(self):
-
         sortedEntity = sorted(set(self.entityMap.values()),
                               key=lambda x: x.freq,
                               reverse=True)
@@ -414,13 +487,4 @@ class Relationship(object):
         return report
 
     def report(self):
-        with open('./ner' + str(self.id) + '.txt', 'w') as f:
-            for ner in self.ner:
-                f.write(ner + '\n')
         print(self)
-        names = set()
-        for e in set(self.entityMap.values()):
-            for name in e.names:
-                if name in names:
-                    print('duplicate name', name)
-                names.add(name)

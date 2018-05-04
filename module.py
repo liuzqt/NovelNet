@@ -21,9 +21,18 @@ class Entity(object):
         self.neighbors = {}
 
     def __str__(self):
-        # temp = list(self.names)
-        # if len(temp) > 5:
-        #     temp = temp[:5]
+        return str(self.id) + "\t" + str(self.names)
+
+
+class Entity2(object):
+    def __init__(self, id, family: bool):
+        self.id = id
+        self.family = family
+        self.names = set()
+        self.freq = 0
+        self.neighbors = {}
+
+    def __str__(self):
         return str(self.id) + "\t" + str(self.names)
 
 

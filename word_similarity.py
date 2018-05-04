@@ -14,7 +14,7 @@
 import numpy as np
 
 
-def isSimilar(word1: str, word2: str, threshold=.6):
+def isSimilar(word1: str, word2: str, threshold=.8):
     minlen = min(len(word1), len(word2))
     return lcs(word1, word2) / minlen >= threshold
 
