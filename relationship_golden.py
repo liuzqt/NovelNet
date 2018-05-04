@@ -20,15 +20,17 @@ import json
 from module import MyMention, MyNER
 from functools import reduce
 import os
+import shutil
 
 
 class RelationshipGolden(object):
     PERSON = 1
 
     def __init__(self, charList, id=-1, pipeline=None, text='', threshold=25,
-                 verbose=True, outputPath='./output/'):
+                 verbose=True, outputPath='./output'):
         if os.path.exists(outputPath):
-            os.rmdir(outputPath)
+            print('tag')
+            shutil.rmtree(outputPath)
         os.mkdir(outputPath)
         self.outputPath = outputPath
         pat = re.compile(r'\n+')
@@ -98,7 +100,7 @@ class RelationshipGolden(object):
             self.parseRelationshipSentence()
         self._adjustForFamily()
 
-    def export_graph(self):
+    def export_graph(self, exclude_family=True):
         '''
         
         :return: 
@@ -106,16 +108,30 @@ class RelationshipGolden(object):
         output = []
         ents = set(self.entityMap.values())
 
-        for ent in ents:
-            temp = {'id': ent.id,
-                    'freq': ent.freq,
-                    'names': list(ent.names),
-                    'neighbor': dict((nb.id, weight)
-                                     for nb, weight in ent.neighbors.items())}
-            output.append(temp)
+        if exclude_family:
+            for ent in ents:
+                if not ent.family:
+                    temp = {'id': ent.id,
+                            'freq': ent.freq,
+                            'names': list(ent.names),
+                            'neighbor': dict((nb.id, weight)
+                                             for nb, weight in
+                                             ent.neighbors.items() if
+                                             not nb.family)}
+                    output.append(temp)
+        else:
+            for ent in ents:
+                temp = {'id': ent.id,
+                        'isFamily': 1 if ent.family else 0,
+                        'freq': ent.freq,
+                        'names': list(ent.names),
+                        'neighbor': dict((nb.id, weight)
+                                         for nb, weight in
+                                         ent.neighbors.items())}
+                output.append(temp)
         if self.verbose:
             print(output)
-        with open(self.outputPath + 'graph.json', 'w') as f:
+        with open(self.outputPath + '/graph.json', 'w') as f:
             json.dump(output, f)
         print('graph dumped to json.')
 
@@ -521,15 +537,15 @@ class RelationshipGolden(object):
                 (self.doc[st:end].text, list(charsId), names))
 
     def exportRelationshipSentence(self):
-        with open(self.outputPath + 'relationshipSentence.pkl', 'wb') as f:
+        with open(self.outputPath + '/relationshipSentence.pkl', 'wb') as f:
             pickle.dump(self.relationship, f)
 
     def exportEntityMapping(self):
-        with open(self.outputPath + 'id2char.pkl', 'wb') as  f:
+        with open(self.outputPath + '/id2char.pkl', 'wb') as  f:
             pickle.dump(self.id2char, f)
-        with open(self.outputPath + 'family2charId.pkl', 'wb') as f:
+        with open(self.outputPath + '/family2charId.pkl', 'wb') as f:
             pickle.dump(self.family2charId, f)
-        with open(self.outputPath + 'charId2family.pkl', 'wb') as f:
+        with open(self.outputPath + '/charId2family.pkl', 'wb') as f:
             pickle.dump(self.char2family, f)
 
     def exportAll(self):
