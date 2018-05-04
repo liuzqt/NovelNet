@@ -35,7 +35,6 @@ def process_text(path='Harry_Potter_and_the_Sorcerers_Stone.txt'):
 
 
 def process_pkl(path='./pkls/', n=None, charList=None):
-    coref = Coref()
     docs = sorted(glob(path + 'doc*'))
     mentions = sorted(glob(path + 'mention*'))
     clusters = sorted(glob(path + 'cluster*'))
@@ -46,6 +45,7 @@ def process_pkl(path='./pkls/', n=None, charList=None):
                                              mentions[:n])
     relationship.report()
     relationship.export_graph()
+    relationship.exportRelationshipSentence()
 
 
 if __name__ == '__main__':

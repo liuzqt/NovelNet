@@ -33,12 +33,17 @@ class RelationshipGolden(object):
         self.pipeline = pipeline
         self.entityMap = {}
         self.text = pat.sub(' ', text)
+        self.temp_relationship = defaultdict(set)
+        self.sents = None
+        self.sentsId2span = None
+        self.doc = None
+        self.relationship = []
 
         i = 0
         self.char2id = {}
         self.id2char = defaultdict(list)
         self.family = set()
-        self.family2char = defaultdict(list)
+        self.family2charId = defaultdict(list)
         self.char2family = {}
         single_character = charList['null']
         for char in single_character:
@@ -54,7 +59,7 @@ class RelationshipGolden(object):
                 words = char.split()
                 for w in words:
                     self.char2id[w] = i
-                    self.family2char[family].append(i)
+                    self.family2charId[family].append(i)
                 self.id2char[i] = words
                 self.char2family[i] = family
                 i += 1
@@ -63,8 +68,10 @@ class RelationshipGolden(object):
         print(self.id2char)
 
     def build_relationship(self):
+        assert len(self.text) > 0
         tokens = self.parseCoref(self.text)
         self.parseRelationship(tokens)
+        self._adjustForFamily()
 
     def build_relationship_from_pkl(self, doc_pkls, clusters_pkls,
                                     mentions_pkls):
@@ -79,28 +86,24 @@ class RelationshipGolden(object):
                 _clusters = pickle.load(f)
             with open(mentions, 'rb') as f:
                 _mentions = pickle.load(f)
+            self.initState()
             tokens = self.parseCoref(None, _doc, _clusters, _mentions)
             self.parseRelationship(tokens)
+        self._adjustForFamily()
 
     def export_graph(self):
         '''
         
         :return: 
         '''
-        return
-        ents = dict((ent, str(idx)) for idx, ent in
-                    enumerate(set(self.entityMap.values())))
         output = []
-        nbs = set()
-        for e in ents:
-            nbs.update(e.neighbors.keys())
-        assert len(ents) >= len(nbs)
+        ents = set(self.entityMap.values())
 
-        for ent, i in ents.items():
-            temp = {'id': i,
+        for ent in ents:
+            temp = {'id': ent.id,
                     'freq': ent.freq,
                     'names': list(ent.names),
-                    'neighbor': dict((ents[nb], weight)
+                    'neighbor': dict((nb.id, weight)
                                      for nb, weight in ent.neighbors.items())}
             output.append(temp)
         if self.verbose:
@@ -117,10 +120,13 @@ class RelationshipGolden(object):
                     and token.absPos - queue[0].absPos > self.threshold:
                 queue.popleft()
             for nb in queue:
-                self._happenRelationship(token.entity, nb.entity)
+                sent1, sent2 = self.sents[token.absPos], self.sents[nb.absPos]
+                self._happenRelationship(token.entity, nb.entity,
+                                         sameSent=sent1 == sent2, sent=sent1)
             queue.append(token)
 
-    def _happenRelationship(self, e1: Entity2, e2: Entity2):
+    def _happenRelationship(self, e1: Entity2, e2: Entity2, sameSent: bool,
+                            sent=-1):
         '''
         
         :param e1: Entity 
@@ -130,13 +136,17 @@ class RelationshipGolden(object):
         if e1 != e2:
             e1.neighbors[e2] = e1.neighbors.get(e2, 0) + 1
             e2.neighbors[e1] = e2.neighbors.get(e1, 0) + 1
+            if not e1.family and not e2.family and sameSent:
+                self.temp_relationship[sent].update([e1.id, e2.id])
 
     def parseCoref(self, text, doc=None, clusters=None, mentions=None):
         tokens = []
+        self.doc = doc
 
         if text:
             self.pipeline.continuous_coref(utterances=text)
             doc = self.pipeline.get_utterances()[0]
+            self.doc = doc
 
             # clusters id is corresponding to mentions
             clusters = self.pipeline.get_clusters(remove_singletons=True)[
@@ -162,6 +172,12 @@ class RelationshipGolden(object):
 
         for ent in filtered_ner:
             ner[ent.start:ent.end] = 1
+
+        self.sents = np.zeros_like(ner)
+        self.sentsId2span = {}
+        for i, sent in enumerate(doc.sents):
+            self.sents[sent.start:sent.end] = i
+            self.sentsId2span[i] = (sent.start, sent.end)
 
         # this is useful when parsing NER, to avoid duplicate entry from Coref,
         # identified as absPos
@@ -206,9 +222,9 @@ class RelationshipGolden(object):
                     print('more than one entity in one coref mention!', m.text)
             elif len(ents_span) == 1:
                 st, end = ents_span[0]
-                name = ' '.join(doc_text[st:end])
-                if name == '':
-                    raise Exception('fuck')
+                if self.sents[st] == self.sents[end - 1]:
+                    # the token should not span in two sentence
+                    name = ' '.join(doc_text[st:end])
 
             display_name = name if name is not None else m.text
             return m, name, ents_span[0][0] if len(
@@ -240,7 +256,7 @@ class RelationshipGolden(object):
             if not ent:
                 continue
             for m, modified_name, absPos, display_name in ms_tuple:
-                token = Token(absPos, display_name, ent)
+                token = Token(absPos, display_name, ent, self.sents[absPos])
                 tokens.append(token)
                 token_map[absPos] = token
 
@@ -418,11 +434,13 @@ class RelationshipGolden(object):
 
         ent.freq += 1
         ent.names.update(char_name if isChar else family_name)
+        assert self.sents[start_idx] == self.sents[end_idx - 1]
         # if not self.check(ent.names):
         #     print(ent.names)
         #     raise Exception('fuck111')
 
-        tokens.append(Token(absPos=start_idx, name=' '.join(names), entity=ent))
+        tokens.append(Token(absPos=start_idx, name=' '.join(names), entity=ent,
+                            sent=self.sents[start_idx]))
 
     def _getSpan(self, arr):
         '''
@@ -467,6 +485,33 @@ class RelationshipGolden(object):
 
     def validEntity(self, word):
         return word in self.char2id or word in self.family
+
+    def _adjustForFamily(self):
+        for family, ids in self.family2charId.items():
+            family_ent = self.entityMap[family]
+            for i in ids:
+                if i not in self.entityMap:
+                    continue
+                ent = self.entityMap[i]
+                family_ent.freq += ent.freq
+                for nb, val in ent.neighbors.items():
+                    family_ent.neighbors[nb] = family_ent.neighbors.get(nb,
+                                                                        0) + val
+
+    def initState(self):
+        self.doc = None
+        self.sentsId2span = None
+        self.sents = None
+        self.temp_relationship = defaultdict(set)
+
+    def parseRelationshipSentence(self):
+        for sentId, charsId in self.temp_relationship.items():
+            st, end = self.sentsId2span[sentId]
+            self.relationship.append((self.doc[st:end].text, list(charsId)))
+
+    def exportRelationshipSentence(self):
+        with open('./relationshipSentence.pkl', 'wb') as f:
+            pickle.dump(self.relationship, f)
 
     def __str__(self):
         sortedEntity = sorted(set(self.entityMap.values()),

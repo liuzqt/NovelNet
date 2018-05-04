@@ -37,10 +37,11 @@ class Entity2(object):
 
 
 class Token(object):
-    def __init__(self, absPos, name, entity):
+    def __init__(self, absPos, name, entity, sent):
         self.absPos = absPos
         self.name = name
         self.entity = entity
+        self.sent = sent
 
 
 class MyNER:
