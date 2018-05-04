@@ -21,7 +21,10 @@ class Entity(object):
         self.neighbors = {}
 
     def __str__(self):
-        return str(self.id) + ":" + str(list(self.names))
+        # temp = list(self.names)
+        # if len(temp) > 5:
+        #     temp = temp[:5]
+        return str(self.id) + "\t" + str(self.names)
 
 
 class Token(object):
@@ -29,6 +32,7 @@ class Token(object):
         self.absPos = absPos
         self.name = name
         self.entity = entity
+
 
 class MyNER:
     def __init__(self, text, start, end):

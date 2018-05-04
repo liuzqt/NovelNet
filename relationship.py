@@ -71,18 +71,8 @@ class Relationship(object):
         nbs = set()
         for e in ents:
             nbs.update(e.neighbors.keys())
-        for rm in self.removed:
-            if rm in nbs:
-                print('removed entity still in neighbors!', rm)
-        print('flag', len(ents), len(nbs))
-        for nb in nbs:
-            if nb is None:
-                print('nb is None!')
-            if nb not in ents:
-                if nb in self.removed:
-                    print('not in ents but in removed')
-                else:
-                    print('not in ents and not in removed')
+        assert len(ents) >= len(nbs)
+
         for ent, i in ents.items():
             temp = {'id': i,
                     'freq': ent.freq,
@@ -235,6 +225,7 @@ class Relationship(object):
         for tk in tokens:
             if tk.entity in self.removed:
                 tk.entity = self.entityMap[next(iter(tk.entity.names))]
+        temp = set(self.entityMap.values())
 
         # parse NER
 
@@ -301,8 +292,6 @@ class Relationship(object):
             merge = existing_ents[0]
             for to_merge in existing_ents[1:]:
                 removed.append(to_merge)
-                if to_merge in self.removed:
-                    print('fuck! remove twice!')
                 self.removed.add(to_merge)
                 # merge freq
                 merge.freq += to_merge.freq
@@ -323,19 +312,10 @@ class Relationship(object):
             self.entityCount += 1
             ent = Entity(self.entityCount)
 
-        # self.entitySet.add(ent)
         ent.names.update(uniqNames)
         ent.freq += count
         for name in ent.names:
             self.entityMap[name] = ent
-        if removed:
-            nbs = set()
-            for e in set(self.entityMap.values()):
-                nbs.update(e.neighbors.keys())
-            # nbs = set(self.entityMap.values())
-            for r in removed:
-                if r in nbs:
-                    print('flag6')
         return ent
 
     def _coref_names_filter(self, names, threshold=0.8, debug=False):
@@ -354,13 +334,17 @@ class Relationship(object):
             for j in range(i + 1, len(uniqNames)):
                 if not isSimilar(uniqNames[i], uniqNames[i + 1]):
                     mat[i][j] = mat[j][i] = 0
+
+        remain_inds = [i for i, row in enumerate(mat) if
+                       row.sum() / total >= threshold]
+        if len(remain_inds) == 0:
+            return [], False
+        remain_mat = mat[remain_inds, :][:, remain_inds]
         if debug:
             print('debug')
             print(mat)
             print(uniqNames)
-        remain_inds = [i for i, row in enumerate(mat) if
-                       row.sum() / total >= threshold]
-        remain_mat = mat[remain_inds, :][:, remain_inds]
+            print(remain_mat)
         if (remain_mat == 0).sum() > 0:
             if self.verbose:
                 print('flag2', nameDict)
@@ -414,10 +398,11 @@ class Relationship(object):
         return self.entityCount - self.mergeCount
 
     def __str__(self):
-        report = ''
+
         sortedEntity = sorted(set(self.entityMap.values()),
                               key=lambda x: x.freq,
                               reverse=True)
+        report = 'Total %d entities.\n\n' % len(sortedEntity)
         report += "Entities sorted by frequency:\n"
         for ent in sortedEntity:
             report += "%s\t%d\n" % (ent, ent.freq)
@@ -436,12 +421,9 @@ class Relationship(object):
             for ner in self.ner:
                 f.write(ner + '\n')
         print(self)
-        print(self.ner)
         names = set()
         for e in set(self.entityMap.values()):
             for name in e.names:
                 if name in names:
                     print('duplicate name', name)
                 names.add(name)
-
-        print(len(self.entityMap), len(names))
