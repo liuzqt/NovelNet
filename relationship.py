@@ -19,7 +19,6 @@ from word_similarity import isSimilar
 import pickle
 import json
 from module import MyMention, MyNER
-from tqdm import tqdm
 
 
 class Relationship(object):

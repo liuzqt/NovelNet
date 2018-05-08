@@ -22,13 +22,11 @@ import json
 def process_text(path='Harry_Potter_and_the_Sorcerers_Stone.txt'):
     coref = Coref()
 
-    text = "Stan Smith study in Pittsburgh, and he has a beautiful daughter called Annie. Smith is a teacher of Alex. Alex is a good boy and he is handsome. Bobby is a dog. The driver is stupid."
-
     with open("Harry_Potter_and_the_Sorcerers_Stone.txt", 'r') as f:
         text = f.read()
 
-    relationship = Relationship(0, pipeline=coref, text=text, threshold=25,
-                                verbose=True)
+    relationship = RelationshipGolden(0, pipeline=coref, text=text, threshold=25,
+                                verbose=False)
     relationship.build_relationship()
     relationship.report()
     relationship.export_graph()

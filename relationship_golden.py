@@ -29,7 +29,6 @@ class RelationshipGolden(object):
     def __init__(self, charList, id=-1, pipeline=None, text='', threshold=25,
                  verbose=True, outputPath='./output'):
         if os.path.exists(outputPath):
-            print('tag')
             shutil.rmtree(outputPath)
         os.mkdir(outputPath)
         self.outputPath = outputPath
@@ -70,9 +69,6 @@ class RelationshipGolden(object):
                 self.id2char[i] = words
                 self.char2family[i] = family
                 i += 1
-        print(self.family)
-        print(self.char2id)
-        print(self.id2char)
 
     def build_relationship(self):
         assert len(self.text) > 0
@@ -350,31 +346,14 @@ class RelationshipGolden(object):
             # create new one
 
             isChar = True if uniqNames[0] in self.char2id else False
-            print('create new', uniqNames, isChar)
+            if self.verbose:
+                print('create new', uniqNames, isChar)
             key = self.char2id[uniqNames[0]] if isChar else uniqNames[0]
             ent = Entity2(id=key, family=not isChar)
             self.entityMap[key] = ent
         ent.names.update(uniqNames)
-        # if not self.check(ent.names):
-        #     print(uniqNames)
-        #     print(ent.names)
-        #     raise Exception('fuckoff')
         ent.freq += count - minus_count
         return ent
-
-    # def check(self, names):
-    #     names = list(names)
-    #     if names[0] in self.char2id:
-    #         if any(n in self.family for n in names):
-    #             return False
-    #         if len(set(self.char2id[n] for n in names)) > 1:
-    #             return False
-    #     else:
-    #         if any(n in self.char2id for n in names):
-    #             return False
-    #         if len(names) > 1:
-    #             return False
-    #     return True
 
     def _coref_names_filter(self, names, threshold=0.8, debug=False):
         '''
@@ -400,7 +379,8 @@ class RelationshipGolden(object):
                 raise Exception('sth wrong here')
 
         if len(family) > 1:
-            print('more than one family!', family)
+            if self.verbose:
+                print('more than one family!', family)
             return [], False, 0
         if len(charDict) == 0:
             # only family name appear
@@ -458,9 +438,6 @@ class RelationshipGolden(object):
         ent.freq += 1
         ent.names.update(char_name if isChar else family_name)
         assert self.sents[start_idx] == self.sents[end_idx - 1]
-        # if not self.check(ent.names):
-        #     print(ent.names)
-        #     raise Exception('fuck111')
 
         tokens.append(Token(absPos=start_idx, name=' '.join(names), entity=ent,
                             sent=self.sents[start_idx]))
@@ -511,6 +488,8 @@ class RelationshipGolden(object):
 
     def _adjustForFamily(self):
         for family, ids in self.family2charId.items():
+            if family not in self.entityMap:
+                continue
             family_ent = self.entityMap[family]
             for i in ids:
                 if i not in self.entityMap:
@@ -531,7 +510,6 @@ class RelationshipGolden(object):
         for sentId, charsId in self.temp_relationship.items():
             temp = list(charsId)
             names = [self.id2char[id] for id in temp]
-            print('sentence', sentId, charsId)
             st, end = self.sentsId2span[sentId]
             self.relationship.append(
                 (self.doc[st:end].text, list(charsId), names))
@@ -548,10 +526,15 @@ class RelationshipGolden(object):
         with open(self.outputPath + '/charId2family.pkl', 'wb') as f:
             pickle.dump(self.char2family, f)
 
+    def exportEntities(self):
+        with open(self.outputPath + '/entities.pkl', 'wb') as  f:
+            pickle.dump(list(set(self.entityMap.values())), f)
+
     def exportAll(self):
         self.export_graph()
         self.exportRelationshipSentence()
         self.exportEntityMapping()
+        self.exportEntities()
 
     def __str__(self):
         sortedEntity = sorted(set(self.entityMap.values()),
