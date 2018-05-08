@@ -58,7 +58,7 @@ def sentiment_score(relationships):
 
 def main():
     out = sentiment_score(data_prepare("relationshipSentence.pkl"))
-    with open("sentiment.txt", "w") as f:
+    with open("sentiment", "w") as f:
         for i in out:
             f.write(i[0] + ":" + str(i[1]))
             f.write("\n")
